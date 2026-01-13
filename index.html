@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My IPTV Player</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body { margin: 0; font-family: sans-serif; background: #121212; color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        header { background: #222; padding: 10px; text-align: center; font-weight: bold; font-size: 1.2rem; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        
+        .container { flex: 1; display: flex; flex-direction: column; }
+        
+        /* プレイヤーエリア */
+        .video-box { background: black; flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: 100%; background: black; }
+
+        /* チャンネルリストエリア */
+        .list-box { height: 250px; background: #1e1e1e; overflow-y: auto; border-top: 1px solid #333; }
+        .channel-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #2a2a2a; cursor: pointer; transition: 0.2s; }
+        .channel-item:hover { background: #333; }
+        .channel-item img { width: 40px; height: auto; margin-right: 15px; border-radius: 4px; }
+        .channel-name { font-size: 0.95rem; }
+
+        /* 横画面（ランドスケープ）時のレイアウト */
+        @media (orientation: landscape) {
+            .container { flex-direction: row; }
+            .video-box { flex: 3; }
+            .list-box { width: 300px; height: auto; border-top: none; border-left: 1px solid #333; }
+        }
+
+        .loading { position: absolute; color: #888; }
+    </style>
+</head>
+<body>
+
+<header>IPTV Japan Live</header>
+
+<div class="container">
+    <div class="video-box">
+        <div id="loading" class="loading">チャンネルを選択してください</div>
+        <video id="video" controls playsinline></video>
+    </div>
+
+    <div class="list-box" id="channelList">
+        <p style="text-align:center; padding:20px;">リストを読み込み中...</p>
+    </div>
+</div>
+
+<script>
+    const LIST_URL = 'https://iptv-org.github.io/iptv/countries/jp.m3u';
+    const video = document.getElementById('video');
+    const listContainer = document.getElementById('channelList');
+    const loadingText = document.getElementById('loading');
+    const hls = new Hls();
+
+    // 1. リストを読み込んで解析
+    async function init() {
+        try {
+            const response = await fetch(LIST_URL);
+            const data = await response.text();
+            const channels = parseM3U(data);
+            renderChannels(channels);
+        } catch (e) {
+            listContainer.innerHTML = '<p style="color:red; text-align:center; padding:20px;">リストの読み込みに失敗しました。</p>';
+        }
+    }
+
+    // M3Uファイルの解析
+    function parseM3U(content) {
+        const lines = content.split('\n');
+        const channels = [];
+        let currentChannel = {};
+
+        lines.forEach(line => {
+            if (line.startsWith('#EXTINF:')) {
+                const name = line.split(',').pop().trim();
+                const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+                currentChannel = { name, logo: logoMatch ? logoMatch[1] : null };
+            } else if (line.startsWith('http')) {
+                currentChannel.url = line.trim();
+                channels.push(currentChannel);
+                currentChannel = {};
+            }
+        });
+        return channels;
+    }
+
+    // チャンネル一覧を表示
+    function renderChannels(channels) {
+        listContainer.innerHTML = '';
+        channels.forEach(ch => {
+            const div = document.createElement('div');
+            div.className = 'channel-item';
+            const logo = ch.logo ? `<img src="${ch.logo}" alt="logo">` : '<div style="width:40px; margin-right:15px;">📺</div>';
+            div.innerHTML = `${logo}<div class="channel-name">${ch.name}</div>`;
+            div.onclick = () => playStream(ch.url, ch.name);
+            listContainer.appendChild(div);
+        });
+    }
+
+    // 再生処理
+    function playStream(url, name) {
+        loadingText.innerText = name + ' を読み込み中...';
+        if (Hls.isSupported()) {
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play();
+                loadingText.innerText = '';
+            });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url;
+            video.play();
+            loadingText.innerText = '';
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>
+
