@@ -1,0 +1,37 @@
+{
+  "NHK総合": [
+    "https://stream01.willfonk.com/live_playlist.m3u8?cid=BS291&r=FHD&ccode=JP&m=d0:20:20:04:35:cc&t=0d6938cb3dcf4b79848bc1753a59daf1",
+    "http://203.162.235.41:16903"
+  ],
+  "NHK Eテレ": [
+    "https://stream01.willfonk.com/live_playlist.m3u8?cid=BS292&r=FHD&ccode=JP&m=d0:20:20:04:35:cc&t=0d6938cb3dcf4b79848bc1753a59daf1",
+    "http://203.162.235.41:16901"
+  ],
+  "日本テレビ": [
+    "https://stream01.willfonk.com/live_playlist.m3u8?cid=BS294&r=FHD&ccode=JP&m=d0:20:20:04:35:cc&t=0d6938cb3dcf4b79848bc1753a59daf1",
+    "http://203.162.235.41:16905"
+  ],
+  "テレビ朝日": [
+    "https://stream01.willfonk.com/live_playlist.m3u8?cid=BS295&r=FHD&ccode=JP&m=d0:20:20:04:35:cc&t=0d6938cb3dcf4b79848bc1753a59daf1",
+    "http://203.162.235.41:16906"
+  ],
+  "TBS": [
+    "https://stream01.willfonk.com/live_playlist.m3u8?cid=BS296&r=FHD&ccode=JP&m=d0:20:20:04:35:cc&t=0d6938cb3dcf4b79848bc1753a59daf1",
+    "http://203.162.235.41:16907"
+  ],
+  "フジテレビ": [
+    "https://stream01.willfonk.com/live_playlist.m3u8?cid=BS298&r=FHD&ccode=JP&m=d0:20:20:04:35:cc&t=0d6938cb3dcf4b79848bc1753a59daf1",
+    "http://203.162.235.41:16904"
+  ],
+  "テレビ東京": [
+    "https://stream01.willfonk.com/live_playlist.m3u8?cid=BS297&r=FHD&ccode=JP&m=d0:20:20:04:35:cc&t=0d6938cb3dcf4b79848bc1753a59daf1",
+    "http://203.162.235.41:16908"
+  ],
+  "ウェザーニュースLiVE": [
+    "https://rch01e-alive-hls.akamaized.net/38fb45b25cdb05a1/out/v1/4e907bfabc684a1dae10df8431a84d21/index.m3u8",
+    "https://strm-m.sandbox.weather.com/live/loop/index.m3u8"
+  ],
+  "TOKYO MX": [
+    "https://cdn-uw2-prod.tsv2.amagi.tv/linear/amg01287-rakutentvjapan-tokyomx-cmaf-rakutenjp/playlist.m3u8"
+  ]
+}
