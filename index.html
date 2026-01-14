@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple TV Player</title>
+    <title>Smart TV Player</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         .video-box { flex: none; height: 40vh; background: #000; position: sticky; top: 0; z-index: 100; border-bottom: 2px solid #333; display: flex; align-items: center; justify-content: center; }
         video { width: 100%; height: 100%; object-fit: contain; }
         .list-box { flex: 1; overflow-y: auto; background: #111; }
-        .item { padding: 18px; border-bottom: 1px solid #222; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
+        .item { padding: 18px; border-bottom: 1px solid #222; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .item:active { background: #333; }
         .item.fav { background: #1a1a1a; border-left: 5px solid #ff0055; font-weight: bold; }
         #status { padding: 8px; font-size: 12px; color: #aaa; text-align: center; background: #111; border-bottom: 1px solid #222; }
@@ -22,7 +22,7 @@
 <div class="video-box">
     <video id="video" controls autoplay playsinline></video>
 </div>
-<div id="status">チャンネルリストを読み込んでいます...</div>
+<div id="status">最新リストを読み込み中...</div>
 <div class="list-box" id="list"></div>
 
 <script>
@@ -31,54 +31,71 @@
     const listDiv = document.getElementById('list');
     const hls = new Hls();
 
-    // 地上波など優先的に上に表示したい局名
-    const FAVS = ["NHK", "日本テレビ", "テレビ朝日", "TBS", "テレビ東京", "フジテレビ", "TOKYO MX", "読売テレビ"];
+    // 読み込むファイルの指定
+    const M3U_FILE = 'my_list.iptvcat.com.m3u8';
+    const JSON_FILE = 'channels.json';
 
     async function init() {
         try {
-            // あなたが作った channels.json を読み込みます
-            const res = await fetch('channels.json?t=' + Date.now());
-            if (!res.ok) throw new Error('channels.json が見つかりません');
-            
-            const data = await res.json();
-            
-            // データを表示用のリスト形式に変換
             let channels = [];
-            Object.keys(data).forEach(name => {
-                channels.push({ name: name, urls: data[name] });
-            });
 
-            // 並び替え：FAVSに含まれるものを上に、それ以外を下に
-            channels.sort((a, b) => {
-                const aIdx = FAVS.findIndex(f => a.name.includes(f));
-                const bIdx = FAVS.findIndex(f => b.name.includes(f));
-                if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-                if (aIdx !== -1) return -1;
-                if (bIdx !== -1) return 1;
-                return a.name.localeCompare(b.name, 'ja');
-            });
+            // 1. M3Uファイルを読み込んで解析
+            const m3uRes = await fetch(M3U_FILE + '?t=' + Date.now());
+            if (m3uRes.ok) {
+                const m3uText = await m3uRes.text();
+                channels = parseM3U(m3uText);
+            }
 
-            listDiv.innerHTML = '';
-            channels.forEach(ch => {
-                const isFav = FAVS.some(f => ch.name.includes(f));
-                const div = document.createElement('div');
-                div.className = 'item' + (isFav ? ' fav' : '');
-                div.innerHTML = `<span>${ch.name}</span>${isFav ? '<span class="fav-star">★</span>' : ''}`;
-                
-                // クリックで再生（1番目のURLを即座に使用）
-                div.onclick = () => play(ch.urls[0], ch.name);
-                listDiv.appendChild(div);
-            });
+            // 2. channels.jsonがあれば、それも追加
+            try {
+                const jsonRes = await fetch(JSON_FILE + '?t=' + Date.now());
+                if (jsonRes.ok) {
+                    const jsonData = await jsonRes.json();
+                    Object.keys(jsonData).forEach(name => {
+                        channels.push({ name: name, url: jsonData[name][0], type: 'json' });
+                    });
+                }
+            } catch (e) { console.log("JSON読み込みスキップ"); }
 
-            status.innerText = "読込完了。見たい局を選んでください。";
+            render(channels);
+            status.innerText = "読込完了。チャンネルを選んでください。";
         } catch (e) {
             status.innerText = "エラー: " + e.message;
         }
     }
 
-    function play(url, name) {
-        status.innerText = name + " に接続しています...";
+    // M3Uファイルの解析
+    function parseM3U(text) {
+        const lines = text.split('\n');
+        const list = [];
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith('#EXTINF:')) {
+                const name = lines[i].split(',').pop().trim();
+                const url = lines[i + 1]?.trim();
+                if (url && url.startsWith('http')) {
+                    list.push({ name: name, url: url, type: 'm3u' });
+                }
+            }
+        }
+        return list;
+    }
+
+    function render(channels) {
+        listDiv.innerHTML = '';
+        // 重複削除と並び替え
+        const uniqueChannels = channels.filter((v, i, a) => a.findIndex(t => t.name === v.name) === i);
         
+        uniqueChannels.forEach(ch => {
+            const div = document.createElement('div');
+            div.className = 'item fav'; // 全てお気に入りとして表示
+            div.innerHTML = `<span>${ch.name}</span><span class="fav-star">★</span>`;
+            div.onclick = () => play(ch.url, ch.name);
+            listDiv.appendChild(div);
+        });
+    }
+
+    function play(url, name) {
+        status.innerText = name + " に接続中...";
         if (Hls.isSupported()) {
             hls.loadSource(url);
             hls.attachMedia(video);
@@ -86,13 +103,8 @@
                 video.play();
                 status.innerText = name + " 再生中";
             });
-            hls.on(Hls.Events.ERROR, (event, data) => {
-                if (data.fatal) {
-                    status.innerText = "エラー: この回線は現在視聴できません";
-                }
-            });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // iPhone/Safari用
+            hls.on(Hls.Events.ERROR, () => { status.innerText = "再生エラー: 回線がオフラインです"; });
+        } else {
             video.src = url;
             video.play();
         }
