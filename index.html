@@ -1,40 +1,98 @@
-// 再生処理の部分を以下に差し替え（エラー表示機能付き）
-function playStream(url, name) {
-    loadingText.style.display = 'block';
-    loadingText.innerText = name + ' を読み込み中...';
-    
-    // 以前の再生を停止
-    video.pause();
-    video.src = "";
-    video.load();
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart IPTV Player</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body { margin: 0; font-family: sans-serif; background: #121212; color: white; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #222; padding: 10px; text-align: center; }
+        .video-box { background: black; flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
+        video { width: 100%; height: 100%; max-height: 50vh; }
+        .list-box { height: 50vh; overflow-y: auto; background: #1e1e1e; }
+        .channel-item { padding: 15px; border-bottom: 1px solid #333; cursor: pointer; }
+        .channel-item:hover { background: #333; }
+        #status { position: absolute; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
 
-    if (Hls.isSupported()) {
-        hls.destroy(); // 一旦リセット
-        const newHls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-        });
-        newHls.loadSource(url);
-        newHls.attachMedia(video);
-        newHls.on(Hls.Events.MANIFEST_PARSED, () => {
-            video.play().catch(e => {
-                loadingText.innerText = "再生エラー: ブラウザの再生ボタンを押してください";
-            });
-            loadingText.style.display = 'none';
-        });
-        newHls.on(Hls.Events.ERROR, (event, data) => {
-            if (data.fatal) {
-                loadingText.innerText = "エラー: この配信源は現在利用できないようです";
-                console.error("HLS Error:", data);
-            }
-        });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // iPhoneなどのSafari用
-        video.src = url;
-        video.addEventListener('loadedmetadata', () => {
-            video.play();
-            loadingText.style.display = 'none';
+<header>Smart IPTV Player</header>
+
+<div class="video-box">
+    <div id="status">チャンネルを選択してください</div>
+    <video id="video" controls playsinline></video>
+</div>
+
+<div class="list-box" id="channelList"></div>
+
+<script>
+    const video = document.getElementById('video');
+    const statusText = document.getElementById('status');
+    const listContainer = document.getElementById('channelList');
+    const hls = new Hls();
+    let channels = {};
+
+    // 1. 整理したJSONファイルを読み込む
+    async function init() {
+        try {
+            const response = await fetch('channels.json');
+            channels = await response.json();
+            renderChannels();
+        } catch (e) {
+            statusText.innerText = "channels.json が見つかりません";
+        }
+    }
+
+    function renderChannels() {
+        Object.keys(channels).forEach(name => {
+            const div = document.createElement('div');
+            div.className = 'channel-item';
+            div.innerText = name;
+            div.onclick = () => tryPlay(name);
+            listContainer.appendChild(div);
         });
     }
-}
 
+    // 2. 映るまで順番にURLを試す魔法の関数
+    async function tryPlay(name) {
+        const urls = channels[name];
+        statusText.style.display = 'block';
+        
+        for (let i = 0; i < urls.length; i++) {
+            statusText.innerText = `${name} 回線 ${i + 1} をテスト中...`;
+            const success = await playStream(urls[i]);
+            if (success) {
+                statusText.style.display = 'none';
+                return; // 映ったら終了
+            }
+        }
+        statusText.innerText = "すべての回線がオフラインです";
+    }
+
+    function playStream(url) {
+        return new Promise((resolve) => {
+            if (Hls.isSupported()) {
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    video.play().then(() => resolve(true)).catch(() => resolve(false));
+                });
+                hls.on(Hls.Events.ERROR, () => resolve(false));
+            } else {
+                video.src = url;
+                video.onloadedmetadata = () => {
+                    video.play().then(() => resolve(true)).catch(() => resolve(false));
+                };
+                video.onerror = () => resolve(false);
+            }
+            // 5秒経ってもダメなら次へ
+            setTimeout(() => resolve(false), 5000);
+        });
+    }
+
+    init();
+</script>
+</body>
+</html>
