@@ -3,101 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Web Player</title>
+    <title>All-Channel Web Player</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        #video-container { flex: none; height: 45vh; background: #111; display: flex; align-items: center; justify-content: center; position: relative; }
-        video { width: 100%; height: 100%; background: #000; }
-        #list-container { flex: 1; overflow-y: auto; background: #1a1a1a; }
-        .channel-item { padding: 15px; border-bottom: 1px solid #333; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .channel-item:active { background: #444; }
-        #status-bar { background: #333; color: #00ff00; padding: 5px; font-size: 11px; text-align: center; }
+        #video-container { flex: none; height: 40vh; background: #000; border-bottom: 2px solid #444; }
+        video { width: 100%; height: 100%; }
+        #status { background: #222; padding: 8px; font-size: 12px; text-align: center; color: #0f0; }
+        #list { flex: 1; overflow-y: auto; background: #111; }
+        .item { padding: 15px; border-bottom: 1px solid #222; cursor: pointer; display: flex; justify-content: space-between; }
+        .item:active { background: #333; }
+        .item span { font-size: 0.9rem; }
+        .url-text { font-size: 0.7rem; color: #666; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 60%; }
     </style>
 </head>
 <body>
 
-<div id="video-container">
-    <video id="video" controls autoplay playsinline></video>
-</div>
-<div id="status-bar">初期化中...</div>
-<div id="list-container"></div>
+<div id="video-container"><video id="video" controls autoplay playsinline></video></div>
+<div id="status">読込中...</div>
+<div id="list"></div>
 
 <script>
     const video = document.getElementById('video');
-    const status = document.getElementById('status-bar');
-    const listContainer = document.getElementById('list-container');
+    const status = document.getElementById('status');
+    const listDiv = document.getElementById('list');
     const hls = new Hls();
 
-    // ファイル名（あなたがアップロードしたファイル名と一致させています）
-    const TARGET_FILE = 'my_list.iptvcat.com.m3u8';
+    // あなたの持っている全ファイルを読み込み対象にします
+    const FILES = ['my_list.iptvcat.com.m3u8', '日本.m3u'];
 
-    async function loadList() {
-        try {
-            status.innerText = "リストを取得しています...";
-            const res = await fetch(TARGET_FILE + '?t=' + Date.now());
-            if (!res.ok) throw new Error("ファイルが見つかりません");
-            
-            const text = await res.text();
-            const lines = text.split('\n');
-            
-            listContainer.innerHTML = '';
-            for (let i = 0; i < lines.length; i++) {
-                if (lines[i].startsWith('#EXTINF:')) {
-                    const name = lines[i].split(',').pop().trim();
-                    const url = lines[i+1]?.trim();
-                    
-                    if (url && url.startsWith('http')) {
-                        const div = document.createElement('div');
-                        div.className = 'channel-item';
-                        div.innerHTML = `<span>${name}</span>`;
-                        div.onclick = () => startPlayback(url, name);
-                        listContainer.appendChild(div);
+    async function init() {
+        let allChannels = [];
+        status.innerText = "すべてのファイルをスキャン中...";
+
+        for (const file of FILES) {
+            try {
+                const res = await fetch(file + '?t=' + Date.now());
+                if (!res.ok) continue;
+                const text = await res.text();
+                const lines = text.split('\n');
+                
+                let currentName = "";
+                for (let line of lines) {
+                    line = line.trim();
+                    if (line.startsWith('#EXTINF:')) {
+                        // カンマの後ろを名前に、なければ行全体から推測
+                        currentName = line.split(',').pop() || "名称未設定局";
+                    } else if (line.startsWith('http')) {
+                        // URLを見つけたら、直前の名前とセットで保存
+                        allChannels.push({
+                            name: currentName || "Unknown Channel (" + line.substring(0,20) + "...) ",
+                            url: line
+                        });
+                        currentName = ""; // リセット
                     }
                 }
-            }
-            status.innerText = "準備完了：局を選択してください";
-        } catch (e) {
-            status.innerText = "エラー: " + e.message;
+            } catch (e) { console.error(file + " load error"); }
         }
+
+        render(allChannels);
+        status.innerText = allChannels.length + " チャンネル見つかりました";
     }
 
-    function startPlayback(url, name) {
+    function render(channels) {
+        listDiv.innerHTML = '';
+        channels.forEach((ch, index) => {
+            const div = document.createElement('div');
+            div.className = 'item';
+            div.innerHTML = `<span>${index + 1}. ${ch.name}</span><span class="url-text">${ch.url}</span>`;
+            div.onclick = () => play(ch.url, ch.name);
+            listDiv.appendChild(div);
+        });
+    }
+
+    function play(url, name) {
         status.innerText = "接続中: " + name;
-        
-        // 既存の再生を一度リセット
-        video.pause();
-        hls.detachMedia();
-        
         if (Hls.isSupported()) {
             hls.loadSource(url);
             hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                video.play().catch(() => {
-                    status.innerText = "再生ボタンを押してください";
-                });
-            });
-            
-            // エラー時の自動リトライ設定
-            hls.on(Hls.Events.ERROR, (event, data) => {
-                if (data.fatal) {
-                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                        status.innerText = "ネットワークエラー：再試行中...";
-                        hls.startLoad();
-                    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                        status.innerText = "メディアエラー：修復中...";
-                        hls.recoverMediaError();
-                    }
-                }
-            });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // Safariや一部のスマートTVブラウザ用
+            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+            hls.on(Hls.Events.ERROR, () => { status.innerText = "エラー: 再生できません"; });
+        } else {
             video.src = url;
             video.play();
         }
     }
 
-    loadList();
+    init();
 </script>
 </body>
 </html>
