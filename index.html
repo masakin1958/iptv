@@ -3,24 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>All-Channel Web Player</title>
+    <title>Hybrid Proxy TV Player</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        #video-container { flex: none; height: 40vh; background: #000; border-bottom: 2px solid #444; }
+        #v-container { flex: none; height: 40vh; background: #000; border-bottom: 2px solid #333; }
         video { width: 100%; height: 100%; }
-        #status { background: #222; padding: 8px; font-size: 12px; text-align: center; color: #0f0; }
+        #status { background: #222; padding: 10px; font-size: 13px; color: #0f0; text-align: center; min-height: 1.2em; }
         #list { flex: 1; overflow-y: auto; background: #111; }
-        .item { padding: 15px; border-bottom: 1px solid #222; cursor: pointer; display: flex; justify-content: space-between; }
+        .item { padding: 15px; border-bottom: 1px solid #222; cursor: pointer; display: flex; flex-direction: column; }
         .item:active { background: #333; }
-        .item span { font-size: 0.9rem; }
-        .url-text { font-size: 0.7rem; color: #666; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 60%; }
+        .ch-name { font-weight: bold; font-size: 1rem; color: #fff; }
+        .ch-url { font-size: 0.7rem; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
     </style>
 </head>
 <body>
 
-<div id="video-container"><video id="video" controls autoplay playsinline></video></div>
-<div id="status">読込中...</div>
+<div id="v-container"><video id="video" controls autoplay playsinline></video></div>
+<div id="status">リストを読み込み中...</div>
 <div id="list"></div>
 
 <script>
@@ -29,62 +29,74 @@
     const listDiv = document.getElementById('list');
     const hls = new Hls();
 
-    // あなたの持っている全ファイルを読み込み対象にします
-    const FILES = ['my_list.iptvcat.com.m3u8', '日本.m3u'];
+    const TARGET_FILE = 'my_list.iptvcat.com.m3u8';
+    
+    // 【中継サーバー設定】
+    // 広く使われている無料プロキシ。これを通すことで http ブロックを回避します。
+    const PROXY = "https://cors-anywhere.herokuapp.com/";
 
     async function init() {
-        let allChannels = [];
-        status.innerText = "すべてのファイルをスキャン中...";
+        try {
+            const res = await fetch(TARGET_FILE + '?t=' + Date.now());
+            if (!res.ok) throw new Error("ファイルが見つかりません");
+            const text = await res.text();
+            const lines = text.split('\n');
+            let allChannels = [];
+            let lastInfName = "";
 
-        for (const file of FILES) {
-            try {
-                const res = await fetch(file + '?t=' + Date.now());
-                if (!res.ok) continue;
-                const text = await res.text();
-                const lines = text.split('\n');
-                
-                let currentName = "";
-                for (let line of lines) {
-                    line = line.trim();
-                    if (line.startsWith('#EXTINF:')) {
-                        // カンマの後ろを名前に、なければ行全体から推測
-                        currentName = line.split(',').pop() || "名称未設定局";
-                    } else if (line.startsWith('http')) {
-                        // URLを見つけたら、直前の名前とセットで保存
-                        allChannels.push({
-                            name: currentName || "Unknown Channel (" + line.substring(0,20) + "...) ",
-                            url: line
-                        });
-                        currentName = ""; // リセット
-                    }
+            for (let line of lines) {
+                line = line.trim();
+                if (!line || line === "#EXTM3U") continue;
+                if (line.startsWith('#EXTINF:')) {
+                    lastInfName = line.split(',').pop().trim();
+                } else if (line.startsWith('http')) {
+                    allChannels.push({ name: lastInfName || "Ch: " + line.split('/').pop(), url: line });
+                    lastInfName = "";
                 }
-            } catch (e) { console.error(file + " load error"); }
+            }
+            render(allChannels);
+            status.innerText = allChannels.length + " チャンネルを読み込みました";
+        } catch (e) {
+            status.innerText = "エラー: " + e.message;
         }
-
-        render(allChannels);
-        status.innerText = allChannels.length + " チャンネル見つかりました";
     }
 
     function render(channels) {
         listDiv.innerHTML = '';
-        channels.forEach((ch, index) => {
+        channels.forEach((ch, i) => {
             const div = document.createElement('div');
             div.className = 'item';
-            div.innerHTML = `<span>${index + 1}. ${ch.name}</span><span class="url-text">${ch.url}</span>`;
+            div.innerHTML = `<span class="ch-name">${i+1}. ${ch.name}</span><span class="ch-url">${ch.url}</span>`;
             div.onclick = () => play(ch.url, ch.name);
             listDiv.appendChild(div);
         });
     }
 
-    function play(url, name) {
-        status.innerText = "接続中: " + name;
+    function play(originalUrl, name) {
+        let finalUrl = originalUrl;
+
+        // HTTPの場合は中継サーバーを噛ませる
+        if (originalUrl.startsWith('http://')) {
+            status.innerText = "【中継中】" + name + " (HTTPを安全な回線に変換しています...)";
+            finalUrl = PROXY + originalUrl;
+        } else {
+            status.innerText = "接続中: " + name;
+        }
+
         if (Hls.isSupported()) {
-            hls.loadSource(url);
+            hls.detachMedia();
+            hls.loadSource(finalUrl);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-            hls.on(Hls.Events.ERROR, () => { status.innerText = "エラー: 再生できません"; });
+            
+            // 再生エラー時の処理
+            hls.once(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    status.innerHTML = `<span style="color:red;">再生失敗。中継サーバーの混雑か、URLの期限切れです。</span>`;
+                }
+            });
         } else {
-            video.src = url;
+            video.src = finalUrl;
             video.play();
         }
     }
