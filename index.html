@@ -6,41 +6,42 @@
     <title>Universal Web Player</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
-        .v-box { flex: none; height: 45vh; background: #000; border-bottom: 2px solid #333; }
+        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        #video-container { flex: none; height: 45vh; background: #111; display: flex; align-items: center; justify-content: center; position: relative; }
         video { width: 100%; height: 100%; background: #000; }
-        .list { flex: 1; overflow-y: auto; background: #111; }
-        .item { padding: 18px; border-bottom: 1px solid #222; cursor: pointer; display: flex; justify-content: space-between; }
-        .item:active { background: #333; }
-        #status { padding: 10px; font-size: 12px; color: #aaa; text-align: center; background: #222; }
+        #list-container { flex: 1; overflow-y: auto; background: #1a1a1a; }
+        .channel-item { padding: 15px; border-bottom: 1px solid #333; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .channel-item:active { background: #444; }
+        #status-bar { background: #333; color: #00ff00; padding: 5px; font-size: 11px; text-align: center; }
     </style>
 </head>
 <body>
 
-<div class="v-box"><video id="video" controls autoplay playsinline></video></div>
-<div id="status">リストを読み込み中...</div>
-<div class="list" id="list"></div>
+<div id="video-container">
+    <video id="video" controls autoplay playsinline></video>
+</div>
+<div id="status-bar">初期化中...</div>
+<div id="list-container"></div>
 
 <script>
     const video = document.getElementById('video');
-    const status = document.getElementById('status');
-    const listDiv = document.getElementById('list');
+    const status = document.getElementById('status-bar');
+    const listContainer = document.getElementById('list-container');
+    const hls = new Hls();
 
-    // VLCのように強引に再生するための設定
-    const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 90
-    });
+    // ファイル名（あなたがアップロードしたファイル名と一致させています）
+    const TARGET_FILE = 'my_list.iptvcat.com.m3u8';
 
-    async function init() {
+    async function loadList() {
         try {
-            // あなたの最新リストを読み込み
-            const res = await fetch('my_list.iptvcat.com.m3u8?t=' + Date.now());
+            status.innerText = "リストを取得しています...";
+            const res = await fetch(TARGET_FILE + '?t=' + Date.now());
+            if (!res.ok) throw new Error("ファイルが見つかりません");
+            
             const text = await res.text();
             const lines = text.split('\n');
             
-            listDiv.innerHTML = '';
+            listContainer.innerHTML = '';
             for (let i = 0; i < lines.length; i++) {
                 if (lines[i].startsWith('#EXTINF:')) {
                     const name = lines[i].split(',').pop().trim();
@@ -48,43 +49,55 @@
                     
                     if (url && url.startsWith('http')) {
                         const div = document.createElement('div');
-                        div.className = 'item';
-                        div.innerText = name;
-                        div.onclick = () => play(url, name);
-                        listDiv.appendChild(div);
+                        div.className = 'channel-item';
+                        div.innerHTML = `<span>${name}</span>`;
+                        div.onclick = () => startPlayback(url, name);
+                        listContainer.appendChild(div);
                     }
                 }
             }
-            status.innerText = "読込完了。局を選択してください。";
+            status.innerText = "準備完了：局を選択してください";
         } catch (e) {
-            status.innerText = "読み込みエラーが発生しました";
+            status.innerText = "エラー: " + e.message;
         }
     }
 
-    function play(url, name) {
-        status.innerText = name + " を再生中...";
+    function startPlayback(url, name) {
+        status.innerText = "接続中: " + name;
         
-        // Android/Fire TV/PC すべてで動くための判定
+        // 既存の再生を一度リセット
+        video.pause();
+        hls.detachMedia();
+        
         if (Hls.isSupported()) {
-            hls.detachMedia(); // 一回リセット
             hls.loadSource(url);
             hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play().catch(() => {
+                    status.innerText = "再生ボタンを押してください";
+                });
+            });
             
-            // エラーが起きても無視して再試行する設定
+            // エラー時の自動リトライ設定
             hls.on(Hls.Events.ERROR, (event, data) => {
                 if (data.fatal) {
-                    hls.startLoad(); // 強制的に再読み込み
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                        status.innerText = "ネットワークエラー：再試行中...";
+                        hls.startLoad();
+                    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                        status.innerText = "メディアエラー：修復中...";
+                        hls.recoverMediaError();
+                    }
                 }
             });
-        } else {
-            // SafariやFire TVの一部ブラウザ用
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Safariや一部のスマートTVブラウザ用
             video.src = url;
             video.play();
         }
     }
-    init();
+
+    loadList();
 </script>
 </body>
 </html>
-
