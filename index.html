@@ -3,29 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HTTPS Auto-Upgrade Player</title>
+    <title>Smart HTTPS Player</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        #v-box { flex: none; height: 40vh; background: #000; border-bottom: 2px solid #333; display: flex; align-items: center; justify-content: center; }
+        #v-box { flex: none; height: 40vh; background: #000; border-bottom: 2px solid #333; }
         video { width: 100%; height: 100%; object-fit: contain; }
-        #status { background: #222; padding: 10px; font-size: 13px; color: #0f0; text-align: center; border-bottom: 1px solid #444; }
+        #status { background: #222; padding: 10px; font-size: 13px; color: #0f0; text-align: center; border-bottom: 1px solid #444; min-height: 1.2em; }
         #list { flex: 1; overflow-y: auto; background: #111; }
         .item { padding: 16px; border-bottom: 1px solid #222; cursor: pointer; }
-        .ch-name { font-weight: bold; font-size: 1rem; color: #fff; display: block; }
-        .ch-url { font-size: 0.7rem; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ch-name { font-weight: bold; display: block; margin-bottom: 4px; }
+        .ch-url { font-size: 10px; color: #555; word-break: break-all; }
     </style>
 </head>
 <body>
 
 <div id="v-box"><video id="video" controls autoplay playsinline></video></div>
 <div id="status">リストを読み込み中...</div>
-<div id="list-box" id="list"></div>
+<div id="list"></div>
 
 <script>
     const video = document.getElementById('video');
     const status = document.getElementById('status');
-    const listBox = document.getElementById('list-box');
+    const listDiv = document.getElementById('list');
     const hls = new Hls();
 
     const M3U_FILE = 'my_list.iptvcat.com.m3u8';
@@ -36,57 +36,60 @@
             const text = await res.text();
             const lines = text.split('\n');
             let channels = [];
-            let currentName = "";
+            let lastInf = "";
 
             for (let line of lines) {
                 line = line.trim();
                 if (line.startsWith('#EXTINF:')) {
-                    currentName = line.split(',').pop().trim();
+                    lastInf = line.split(',').pop().trim();
                 } else if (line.startsWith('http')) {
-                    channels.push({ name: currentName || "Unknown", url: line });
-                    currentName = "";
+                    channels.push({ name: lastInf || "Unknown", url: line });
+                    lastInf = "";
                 }
             }
             render(channels);
-            status.innerText = channels.length + " チャンネルを読み込みました";
-        } catch (e) {
-            status.innerText = "リストの読み込みに失敗しました";
-        }
+            status.innerText = channels.length + " 局を読み込み完了";
+        } catch (e) { status.innerText = "読込失敗"; }
     }
 
     function render(channels) {
-        listBox.innerHTML = '';
+        listDiv.innerHTML = '';
         channels.forEach(ch => {
             const div = document.createElement('div');
             div.className = 'item';
             div.innerHTML = `<span class="ch-name">${ch.name}</span><span class="ch-url">${ch.url}</span>`;
-            div.onclick = () => play(ch.url, ch.name);
-            listBox.appendChild(div);
+            div.onclick = () => playAttempt(ch.url, ch.name, true);
+            listDiv.appendChild(div);
         });
     }
 
-    function play(url, name) {
-        // 【重要】ここで自動的に HTTPS に書き換えます
-        let secureUrl = url.replace("http://", "https://");
+    function playAttempt(url, name, tryHttps) {
+        // http だった場合に https へ書き換える
+        let targetUrl = tryHttps ? url.replace("http://", "https://") : url;
         
-        status.innerText = "接続中(HTTPS化): " + name;
+        status.innerText = (tryHttps ? "【HTTPS試行】" : "【HTTP試行】") + name;
 
         if (Hls.isSupported()) {
             hls.detachMedia();
-            hls.loadSource(secureUrl);
+            hls.loadSource(targetUrl);
             hls.attachMedia(video);
+
+            // 接続エラーが起きた時の処理
+            hls.once(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    if (tryHttps) {
+                        // HTTPSでダメなら、元のURL（HTTP）で再試行
+                        playAttempt(url, name, false);
+                    } else {
+                        status.innerText = "再生エラー: リンク切れの可能性があります";
+                    }
+                }
+            });
+
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 video.play();
                 status.innerText = "再生中: " + name;
             });
-            hls.once(Hls.Events.ERROR, (event, data) => {
-                if (data.fatal) {
-                    status.innerText = "エラー: サーバーが HTTPS 接続を拒否しました";
-                }
-            });
-        } else {
-            video.src = secureUrl;
-            video.play();
         }
     }
 
