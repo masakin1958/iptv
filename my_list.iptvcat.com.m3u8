@@ -1,0 +1,32 @@
+#EXTM3U
+#EXTINF:-1,NHK 総合 (東京)
+https://m-live.mcas.jp/mcas/nn24_2/chunklist.m3u8
+#EXTINF:-1,日本テレビ (Backup)
+https://vnpt.nekocdn.xyz/memfs/e6e76834-8c4d-498c-8438-d9d3752e2e92.m3u8
+#EXTINF:-1,テレビ朝日 (Backup)
+https://vnpt.nekocdn.xyz/memfs/460a3598-a621-4f96-8051-9e73d3283282.m3u8
+#EXTINF:-1,TBS (Backup)
+https://vnpt.nekocdn.xyz/memfs/32577533-8c4d-498c-8438-d9d3752e2e92.m3u8
+#EXTINF:-1,テレビ東京 (Backup)
+https://vnpt.nekocdn.xyz/memfs/55e76834-8c4d-498c-8438-d9d3752e2e92.m3u8
+#EXTINF:-1,フジテレビ (Backup)
+https://vnpt.nekocdn.xyz/memfs/22577533-8c4d-498c-8438-d9d3752e2e92.m3u8
+#EXTINF:-1,TOKYO MX 1
+https://cdn-uw2-prod.tsv2.amagi.tv/linear/amg01287-rakutentvjapan-tokyomx-cmaf-rakutenjp/playlist.m3u8
+#EXTINF:-1,WOWOW Prime
+https://vnpt.nekocdn.xyz/memfs/c7f9407a-6fcb-46e2-a649-98c15ffe0a6e.m3u8
+#EXTINF:-1,AT-X (アニメ専門)
+https://vnpt.nekocdn.xyz/memfs/934473ee-a4c0-40be-bae1-5c692023c2bd.m3u8
+#EXTINF:-1,Animax (アニメ専門)
+https://vnpt.nekocdn.xyz/memfs/68ea67df-d4e1-44cb-bdb9-179dd01b7db4.m3u8
+#EXTINF:-1,STAR Channel 1 (映画)
+https://vnpt.nekocdn.xyz/memfs/7a4473ee-a4c0-40be-bae1-5c692023c2bd.m3u8
+#EXTINF:-1,J SPORTS 1
+https://vnpt.nekocdn.xyz/memfs/124473ee-a4c0-40be-bae1-5c692023c2bd.m3u8
+#EXTINF:-1,Discovery Channel (教養)
+https://vnpt.nekocdn.xyz/memfs/334473ee-a4c0-40be-bae1-5c692023c2bd.m3u8
+#EXTINF:-1,日テレNEWS24
+https://ntv24-hls.akamaized.net/hls/live/2013531/ntv24/index.m3u8
+#EXTINF:-1,ウェザーニュース
+https://rch01e-alive-hls.akamaized.net/38fb45b25cdb05a1/out/v1/4e907bfabc684a1dae10df8431a84d21/index.m3u8
+
